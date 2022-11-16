@@ -1,38 +1,15 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLLoader } from 'three/addons/loaders/VRMLLoader.js'
-
-// const Flatten = globalThis["@flatten-js/core"];
-// const {point, Polygon} = Flatten;
-// const {unify, intersect} = window["boolean-op"];
-
-// let polygon1 = new Polygon();
-// polygon1.addFace([point(200,10), point(100, 300), point(400, 150), point(250, 10)]);
-
-// let polygon2 = new Polygon();
-// polygon2.addFace([point(450, 10), point(0, 150), point(300,300), point(600, 300)]);
-
-// let polygon_res = intersect(polygon1, polygon2);
-// console.log(polygon_res);
-
-// console.log(PolyBool.union({
-//     regions: [
-//       [[50,50], [150,150], [190,50]],
-//       [[130,50], [290,150], [290,50]]
-//     ],
-//     inverted: false
-//   }, {
-//     regions: [
-//       [[110,20], [110,110], [20,20]],
-//       [[130,170], [130,20], [260,20], [260,170]]
-//     ],
-//     inverted: false
-//   }));
 
 
 
 var webGLRenderer, camera, scene, renderTarget;
 var toRender = false;
+
+const pickingScene = new THREE.Scene();
+pickingScene.background = new THREE.Color(1000);
+var pickingModel, pickHelper;
+const idToObject = {};
 
 var VRMLmodel;
 var ModelSurfaceArea=0;
@@ -67,96 +44,60 @@ const getArea = (mesh)=>{
     }
     return SurfaceArea;
 }
-// const getMVPval = (mesh)=>{
-//     var v = new THREE.Vector3;
-//     var posAttr = mesh.geometry.attributes.position;
-//     var size = posAttr.count;
-
-
-//     var MVmatrix = new THREE.Matrix4();
-//     MVmatrix.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
-//     var MVPmatrix = new THREE.Matrix4();
-//     MVPmatrix.multiplyMatrices(camera.projectionMatrix, MVmatrix);
-    
-//     console.log(MVPmatrix);
-
-//     var Triangles = []
-//     for(var i=0; i<size; i+=9)
-//     {
-//         // i,   i+1, i+2 -> V1
-//         // i+3, i+4, i+5 -> V2
-//         // i+6, i+7, i+8 -> V3
-//         var v1 = new THREE.Vector3(posAttr.array[i],posAttr.array[i+1],posAttr.array[i+2]);
-//         var v2 = new THREE.Vector3(posAttr.array[i+3],posAttr.array[i+4],posAttr.array[i+5]);
-//         var v3 = new THREE.Vector3(posAttr.array[i+6],posAttr.array[i+7],posAttr.array[i+8]);
-    
-//         v1.applyMatrix4(MVPmatrix);
-//         v2.applyMatrix4(MVPmatrix);
-//         v3.applyMatrix4(MVPmatrix);
-        
-//         Triangles.push({
-//             regions: [
-//                 [v1.x, v1.y],[v2.x, v2.y],[v3.x, v3.y]
-//             ],
-//             inverted: false
-//         });
-//     }
-//     console.log(Triangles);
-
-
-//     var segments = PolyBool.segments(Triangles[0]);
-//     for (var i = 1; i < Triangles.length; i++){
-//         var seg2 = PolyBool.segments(Triangles[i]);
-//         var comb = PolyBool.combine(segments, seg2);
-//         segments = PolyBool.selectUnion(comb);
-//         console.log(segments);
-//     }
-//     var finPoly = PolyBool.polygon(segments);
-//     console.log(finPoly);
-
-// }
 
 function init(model)
 {
     toRender = true;
-    //-----------------------------------------
     const sizes = {
         width: window.innerWidth,
         height: window.innerHeight
     }
     
+    pickHelper = new GPUPickHelper();
     webGLRenderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
     webGLRenderer.setClearColor(new THREE.Color("rgb(255,255,255)"));
     webGLRenderer.setSize(sizes.width, sizes.height);
     scene = new THREE.Scene();
 
-    //-----------------------------------------
-    // OBJcube = obj;
-    // console.log(OBJcube);
-    // scene.add(OBJcube);
-    //-----------------------------------------
-    // const geometry = new THREE.BoxGeometry(1,1,1);
-    // const customShaderMaterial = new THREE.ShaderMaterial({
-    //     vertexShader: vertexShader,
-    //     fragmentShader: fragmentshader
-    // });
-
-    // const material = new THREE.MeshBasicMaterial({
-    //     color: 'blue'
-    // });
-    // cubeMesh = new THREE.Mesh(geometry, customShaderMaterial);
-    // scene.add(cubeMesh);
-    //-----------------------------------------
     model.traverse(function (child) {
         if (child instanceof THREE.Mesh) {
+            const material = new THREE.MeshBasicMaterial({color: 0xff0000});
+            const mesh = new THREE.Mesh(child.geometry, material);
+            mesh.scale.set(10,10,10);
+            mesh.position.set(0,0,0);
+            scene.add(mesh);
             console.log(child.geometry);
         }
     });
     VRMLmodel = model;
-    VRMLmodel.scale.set(10, 10, 10);
+    // VRMLmodel.scale.set(10, 10, 10);
 
-    scene.add(VRMLmodel);
-    //-------------------------------------------
+    // scene.add(VRMLmodel);
+    pickingModel = VRMLmodel.clone(true);
+
+    var i = 0;
+    pickingModel.traverse(function(child){
+        if(child instanceof THREE.Mesh){
+            i = i + 1;
+            idToObject[i] = child;
+
+            const pickingMaterial = new THREE.MeshPhongMaterial({
+                emissive: new THREE.Color(i),
+                color: new THREE.Color(0, 0, 0),
+                specular: new THREE.Color(0, 0, 0),
+                transparent: true,
+                side: THREE.DoubleSide,
+                alphaTest: 0.5,
+                blending: THREE.NoBlending,
+              });
+
+            const pickingComponent = new THREE.Mesh(child.geometry, pickingMaterial);
+            pickingComponent.scale.set(10,10,10);
+            pickingScene.add(pickingComponent);
+            console.log(child.geometry.attributes.position.array);
+        } 
+    });
+
     
     camera = new THREE.PerspectiveCamera(75, sizes.width/sizes.height, 0.1, 10000);
     camera.position.x = 300;
@@ -164,6 +105,7 @@ function init(model)
     camera.position.z = 300;
     camera.lookAt(new THREE.Vector3(0, 0, 0));
     scene.add(camera);
+    // pickingScene.add(camera);
 
     var dir1 = new THREE.DirectionalLight(0.4);
     dir1.position.set(-1000, 1000, -1000);
@@ -188,16 +130,9 @@ function init(model)
         }
     });
 }
-//----------------------------------------------
-// const loader = new OBJLoader();
-// loader.load( 'model/cube.obj', init);
-//----------------------------------------------
 
-//-------------------------------------------------
 var vrmlloader = new VRMLLoader();
 vrmlloader.load("./model/small.wrl", init);
-//-------------------------------------------------
-// getMVPval(cubeMesh);
 
 var stopAnimation = false;
 document.addEventListener('keydown', (ev)=>{
@@ -206,32 +141,66 @@ document.addEventListener('keydown', (ev)=>{
         stopAnimation = true;
     }
 });
-
-// function readPixels(){
-//     webGLRenderer.setRenderTarget(renderTarget);
-//     webGLRenderer.render(scene, camera);
-
-//     const pixelBuffer = new THREE.Uint8BufferAttribute(4);
-//     webGLRenderer.readRenderTargetPixels(renderTarget, 1, 1, webGLRenderer.domElement.width, webGLRenderer.domElement.height, pixelBuffer);
-//     // for(var i=0; i<window.innerHeight; i+=1)
-//     // {
-//     //     for(var j=0; j<window.innerWidth; i+=1)
-//     //     {
-//     //         const pixelBuffer = new THREE.Uint8BufferAttribute(4);
-//     //         webGLRenderer.readRenderTargetPixels(renderTarget, j, i, webGLRenderer.domElement.width, webGLRenderer.domElement.height, pixelBuffer);
-//     //         console.log(pixelBuffer);
-//     //     }
-//     // }
-//     console.log(pixelBuffer);
-//     console.log("---------------------------");    
-// }
-
-
-
-
 //------------------------------------------------------------------------------------------------------------
-const POPULATION_SIZE = 150; 
+class GPUPickHelper {
+    constructor(){
+        this.pickingTexture = new THREE.WebGLRenderTarget(1,1);
+        this.pixelBuffer = new Uint8Array(4);
+
+        //Dunno about this
+        this.pickedObject = null;
+        this.pickedObjectSavedColor = 0;
+    }
+    pick(position, funcScene, funcCamera){
+        var xm = position.x;
+        var ym = position.y;
+        // var xm = (1-position.x)*window.innerWidth/2;
+        // var ym = (1-position.y)*window.innerHeight/2;
+        // Currently position is from -1 to -1, i.e. in ClipSpace
+        const {pickingTexture, pixelBuffer} = this;
+
+        if (this.pickedObject) {
+            this.pickedObject = undefined;
+        }
+
+        // set the view offset to represent just a single pixel under the mouse
+        const pixelRatio = webGLRenderer.getPixelRatio();
+        funcCamera.setViewOffset(
+            window.innerWidth,   // full width
+            window.innerHeight,  // full top
+            xm* pixelRatio | 0,           // rect x
+            ym * pixelRatio | 0,           // rect y
+            1,                                     // rect width
+            1,                                     // rect height
+        );
+        // render the funcScene
+        webGLRenderer.setRenderTarget(pickingTexture)
+        webGLRenderer.render(funcScene, funcCamera);
+        webGLRenderer.setRenderTarget(null);
+    
+        // clear the view offset so rendering returns to normal
+        camera.clearViewOffset();
+        //read the pixel
+        webGLRenderer.readRenderTargetPixels(
+            pickingTexture,
+            0,   // x
+            0,   // y
+            1,   // width
+            1,   // height
+            pixelBuffer);
+    
+        const id =
+            (pixelBuffer[0] << 16) |
+            (pixelBuffer[1] <<  8) |
+            (pixelBuffer[2]      );
+
+        return id;
+    }
+}
+//-----------------------------------------------------------------------------------------
+const POPULATION_SIZE = 10; 
 const RADIUS = 500;
+const MIN_SAME_COUNT = 1;
 function random_num(start, end)
 {
     return start + Math.random()*(end-start);
@@ -245,7 +214,108 @@ function loadImage(url) {
         image.src = url; 
     });
 }
-async function create_genome()
+async function calculate_fitness(ind)
+{
+    console.log("Calculating Fitness")
+    // Set the camera to this position
+    camera.position.x = ind.x;
+    camera.position.y = ind.y;
+    camera.position.z = ind.z;
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+    // //------------------------------VISIBLE COMPONENTS MEASURE-----------------------------------
+    // // Component COunter
+    // var components = new Set();
+    
+    
+    // var totalComponents = 0;
+    // var ith=0;
+    // pickingModel.traverse(function(child){
+    //     if(child instanceof THREE.Mesh)
+    //     {
+    //         ith=ith+1;
+    //         console.log("CHILD: ",ith);
+
+    //         totalComponents+=1;
+    //         var positions = child.geometry.attributes.position;
+    //         var posSize = positions.count;
+    //         for(var i=0; i<posSize; i+=3)
+    //         {
+    //             var v1 = new THREE.Vector4(positions.array[i],positions.array[i+1],positions.array[i+2], 1);
+    //             console.log(v1);
+    //             const M = new THREE.Matrix4();
+    //             M.set(
+    //                 10, 0, 0, 0,
+    //                 0, 10, 0, 0,
+    //                 0, 0, 10, 0,
+    //                 0, 0, 0, 1
+    //             )
+    //             // const M = child.matrixWorld;
+    //             v1.applyMatrix4(M);
+    //             console.log(v1);
+
+    //             const V = camera.matrixWorldInverse;
+    //             v1.applyMatrix4(V);
+    //             console.log(V,v1);
+
+    //             const P = camera.projectionMatrix;
+    //             v1.applyMatrix4(P);     //Clip Space
+    //             console.log(P,v1);
+    //             v1.divideScalar(v1.w);  //NDC
+    //             console.log(v1);
+
+    //             const W = new THREE.Matrix4();
+    //             const {x: WW, y: WH} = webGLRenderer.getSize(new THREE.Vector2());
+    //             // console.log(WW,WH);
+    //             W.set(
+    //                 WW/2, 0    ,  0  ,   WW/2,
+    //                 0,    -WH/2,  0  ,   WH/2,
+    //                 0,    0    ,  0.5,   0.5,
+    //                 0,    0    ,  0  ,   1 
+    //             );
+    //             v1.applyMatrix4(W);
+    //             console.log(v1);
+    //             var point = {
+    //                 'x': Math.round(v1.x),
+    //                 'y': Math.round(v1.y)
+    //             }
+    //             var objectID = pickHelper.pick(point, pickingScene, camera);
+    //             console.log(point, objectID);
+    //             if(idToObject[objectID]==child)
+    //             {
+    //                 console.log(objectID);
+    //                 components.add(objectID);
+    //             }
+    //             break;
+    //         }
+    //     }
+    // });
+    // console.log(components);
+    // var componentsVisibleValue = totalComponents/components.size; //REverse ratio since we need to minimize total measure
+
+
+    //----------------------------VISIBLE AREA MEASURE------------------------------------------------
+    let counter = 0;
+
+    webGLRenderer.render(scene, camera);
+    var imgData = webGLRenderer.domElement.toDataURL();
+
+    return loadImage(imgData).then(img => {
+        var ci = cv.imread(img);        
+        for (var x of ci.data) {
+        if (x == 0) {
+                counter++;
+            }
+        }
+        counter = counter/(ModelSurfaceArea*100);
+
+        var fitnessValue = 0;
+        fitnessValue = counter;
+        // fitnessValue +=  (componentsVisibleValue*10+counter);
+        return fitnessValue;     
+    });
+}
+function create_genome()
 {
     var xi, yi, zi;
     xi = random_num(-100,100);
@@ -259,38 +329,15 @@ async function create_genome()
     xi = xi*RADIUS;
     yi = yi*RADIUS;
     zi = zi*RADIUS;
-
-    // Set the camera to this position
-    camera.position.x = xi;
-    camera.position.y = yi;
-    camera.position.z = zi;
-    camera.lookAt(new THREE.Vector3(0, 0, 0));
-    // call the draw and calculating the fitness value function
-
-    let counter = 0;
-
-    webGLRenderer.render(scene, camera);
-    var imgData = webGLRenderer.domElement.toDataURL();
-
-    return loadImage(imgData).then(img => {
-        var ci = cv.imread(img);        
-        for (var x of ci.data) {
-        if (x == 0) {
-                counter++;
-            }
-        }
-        counter = counter/ModelSurfaceArea;
-        return [xi, yi, zi, counter];     
-    });
+    return [xi,yi,zi];
 }
 class Individual{
 
-    constructor(x,y,z,f)
+    constructor(x,y,z)
     {
         this.x = x;
         this.y = y;
         this.z = z;
-        this.fitness = f;
     }
 
     mate(ind1)
@@ -347,15 +394,20 @@ var prev_fit_count = 0;
 var bestFit = false;
 async function main()
 {
+    console.log(window.innerHeight, window.innerWidth);
     var generation = 0;
 
     var population = [];
 
     for(var i=0; i<POPULATION_SIZE; i+=1)
     {
-        await create_genome().then(v => {population.push(new Individual(v[0],v[1],v[2],v[3]));})
+        var v = create_genome();
+        const ind = new Individual(v[0],v[1],v[2]);
+        await calculate_fitness(ind).then(fit=>{
+            ind.fitness = fit;
+            population.push(ind);
+        });
     }
-    console.log(population);
     var flag = false;
     while(!flag)
     {
@@ -371,7 +423,7 @@ async function main()
             previous_fitness=population[0].fitness;
             prev_fit_count = 0;
         }
-        if(prev_fit_count>1000)
+        if(prev_fit_count>MIN_SAME_COUNT)
         {
             flag = true;
             break;
@@ -391,7 +443,11 @@ async function main()
         {
             var i1 = Math.floor(random_num(0,POPULATION_SIZE/2));
             var i2 = Math.floor(random_num(0,POPULATION_SIZE/2));
-            new_generation.push(population[i1].mate(population[i2]));
+            var new_ind = population[i1].mate(population[i2]);
+            await calculate_fitness(new_ind).then(f=>{
+                new_ind.fitness = f;
+                new_generation.push(new_ind);
+            })
         }
         population = new_generation;
         console.log(`Gen: ${generation} Fitness: ${population[0].fitness}`);
@@ -417,12 +473,63 @@ async function main()
     scene.add(spotLight3);
     window.requestAnimationFrame(animate);
 }
-// main();
 
+//------------------OVERLAYS------------------------------------------
+
+// Mouse Coordinates in Canvas system
+var mouseXElement = document.querySelector('#mousex');
+var mouseX = document.createTextNode("");
+mouseXElement.appendChild(mouseX);
+
+var mouseYElement = document.querySelector('#mousey');
+var mouseY = document.createTextNode("");
+mouseYElement.appendChild(mouseY);
+
+var idElement = document.querySelector('#objectID');
+var id = document.createTextNode("");
+idElement.appendChild(id);
+//----------------------TESTING----------------------------------------
+var pos=0;
+function setPickPosition(event)
+{
+    pos = {
+        x: event.clientX,
+        y: event.clientY,
+    }
+    var objectID = pickHelper.pick(pos, pickingScene, camera);
+    if(typeof pos.x!=undefined)
+    {
+        mouseX.nodeValue = pos.x;
+        mouseY.nodeValue = pos.y;
+        id.nodeValue = objectID;
+    }
+}
+window.addEventListener('mousemove', setPickPosition);
+
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener("resize", onWindowResize, false);
+
+const run=()=>{
+    if(toRender)
+    {
+        // webGLRenderer.render(pickingScene, camera);
+        webGLRenderer.render(scene, camera);
+    }
+    window.requestAnimationFrame(run);
+}
+// run();
+
+//----------------------------------------------------------------------
 const animate = ()=>{
     if(toRender)
     {
-        // webGLRenderer.render(scene, camera);
+        // if(0)main();
         if(!bestFit)main();
         else
         {
@@ -441,12 +548,3 @@ const animate = ()=>{
 }
 animate();
 
-
-
-//------------TO-DO--------------------------
-/*
-- Change the fitness function 
-- calculate surface area of the model
-- figure out how the fourth variable i.e. Distance from center of model should be incorporated in the optimisation algorithm
-- only the vertices, check the primitives, if they are visible by position
-*/

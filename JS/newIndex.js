@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const wrlFileName = "./model/large.wrl";
 const Scale = 2.5;
 
+
 //----------------------RENDER RELATED VARIABLES-----------------------------------------
 var stopAnimation = false;
 var webGLRenderer, camera, scene, renderTarget;

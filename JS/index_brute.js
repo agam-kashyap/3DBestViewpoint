@@ -22,18 +22,13 @@ const debug=false;
 //---------------------------------------------------------------------------------------
 
 
-//---------------------GENETIC ALGORITHM VARIABLES--------------------------
-const POPULATION_SIZE = 15; 
+//---------------------MAIN VARIABLES--------------------------
+const COUNT_LON=13;
+const COUNT_LAT=14;
 const RADIUS = 500;
-const MIN_SAME_COUNT = 3;
 var ModelSurfaceArea=0;
 const colorToComponent = {};
 var totalComponents = 0;
-
-var RANDOM_RANGE = 1000;//Determines how fine the camera positions are generated
-
-var previous_fitness = 0;
-var prev_fit_count = 0;
 var bestFit = false;
 
 //-----------------------------------------------------------------------------
@@ -116,13 +111,7 @@ function init(model)
     camera.position.x = RADIUS;
     camera.position.y = RADIUS;
     camera.position.z = RADIUS;
-    // box.setFromObject(assembly);
-    // var boxDiagX = box.max.x - box.min.x;
-    // var boxDiagY = box.max.y - box.min.y;
-    // var boxDiagZ = box.max.z - box.min.z;
-    // center.x = box.min.x + boxDiagX / 2;
-    // center.y = box.min.y + boxDiagY / 2;
-    // center.z = box.min.z + boxDiagZ / 2;
+    
     console.log(center);
     camera.lookAt(center.x, center.y, center.z);
 
@@ -162,33 +151,38 @@ function loadImage(url) {
         image.addEventListener('load', () => {
             resolve(image);
         });
-        image.src = url; 
+        image.src = url;  
     });
 }
-function create_genome()
+function generate_all_pos(radius, count_lat, count_lon)
 {
-    var xi, yi, zi;
-    xi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-    yi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-    zi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-    var div = Math.sqrt(Math.pow(xi,2)+Math.pow(yi,2)+Math.pow(zi,2));
-    xi = (1.0*xi)/div;
-    yi = (1.0*yi)/div;
-    zi = (1.0*zi)/div;
+    var theta = 0;
+    var phi = 0;
+    pos = [];
+    for(var i=0; i<count_lat; i+=1)
+    {
+        theta += Math.PI/count_lat;
+        phi=0;
+        for(var j=0; j<count_lon; j+=1)
+        {
+            phi += 2*Math.PI/count_lon;
 
-    xi = xi*RADIUS;
-    yi = yi*RADIUS;
-    zi = zi*RADIUS;
-    return [xi,yi,zi];
+            var x = radius*Math.sin(theta)*Math.cos(phi);
+            var y = radius*Math.sin(theta)*Math.sin(phi);
+            var z = radius*Math.cos(phi);
+            pos.push([x,y,z]);
+        }   
+    }
+    return pos;
 }
 //----------------------------------------------------------------------------------------------------------------------------
 //------------------------------------------------------FITNESS CALCULATION FUNCTION------------------------------------------
 async function calculate_fitness(ind)
 {
     // Set the camera to this position
-    camera.position.x = ind.x;
-    camera.position.y = ind.y;
-    camera.position.z = ind.z;
+    camera.position.x = ind[0];
+    camera.position.y = ind[1];
+    camera.position.z = ind[2];
     camera.lookAt(center.x, center.y, center.z);
 
     let componentCount = new Set();
@@ -239,155 +233,27 @@ async function calculate_fitness(ind)
         fitnessValue = componentsVisibleValue + counter + 1/cpCount;
         return fitnessValue;
     })
-    
-    // //----------------------------VISIBLE AREA MEASURE------------------------------------------------
-    // let counter = 0;
-
-    // webGLRenderer.render(scene, camera);
-    // var imgData = webGLRenderer.domElement.toDataURL();
-
-    // return loadImage(imgData).then(img => {
-    //     var ci = cv.imread(img);        
-    //     for (var x of ci.data) {
-    //     if (x == 0) {
-    //             counter++;
-    //         }
-    //     }
-    //     counter = counter/(ModelSurfaceArea*100);
-
-    //     var fitnessValue = 0;
-    //     // fitnessValue = counter;
-    //     fitnessValue = componentsVisibleValue;
-    //     // fitnessValue +=  (componentsVisibleValue*10+counter);
-    //     return fitnessValue;     
-    // });
-}
-//-------------------------------------------------------------------------------------------------------------------
-//--------------------------------------------GENETIC POPULATION GENERATION------------------------------------------
-class Individual{
-
-    constructor(x,y,z)
-    {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-
-    mate(ind1)
-    {
-        // I1: x1,y1,z1
-        // I2: x2,y2,z2
-        
-        var prob = (1.0*random_num(0,100))/100;
-        var xi,yi,zi;
-        if(prob<0.9)
-        {
-            // choose p*ind1 + (1-p)*this
-            xi = ind1.x*prob + (1-prob)*this.x;
-            yi = ind1.y*prob + (1-prob)*this.y;
-            zi = ind1.z*prob + (1-prob)*this.z;    
-        }
-        else
-        {
-            // random point on the sphere
-            xi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-            yi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-            zi = random_num(-RANDOM_RANGE,RANDOM_RANGE);
-        }
-        var div = Math.sqrt(Math.pow(xi,2)+Math.pow(yi,2)+Math.pow(zi,2));
-        xi = (1.0*xi)/div;
-        yi = (1.0*yi)/div;
-        zi = (1.0*zi)/div;
-
-        xi = xi*RADIUS;
-        yi = yi*RADIUS;
-        zi = zi*RADIUS;
-        return new Individual(xi,yi,zi);
-    }
 }
 
-// Comparing based on the property
-function compare_ind(a, b){
-    // a should come before b in the sorted order
-    if(a.fitness < b.fitness){
-            return -1;
-    // a should come after b in the sorted order
-    }else if(a.fitness > b.fitness){
-            return 1;
-    // and and b are the same
-    }else{
-            return 0;
-    }
-}
 //--------------------------------------------------------------------------------------------------------
 //----------------------------------------------MAIN LOOP-------------------------------------------------
 async function main()
 {
-    var generation = 0;
-
-    var population = [];
-
-    console.log("INITIAL POPULATION GENERATION BEGINS");
-    for(var i=0; i<POPULATION_SIZE; i+=1)
+    var pos = generate_all_pos(RADIUS, COUNT_LAT,COUNT_LON);
+    var res = []
+    for(var i=0; i<pos.length; i+=1)
     {
-        var v = create_genome();
-        // var v = [RADIUS, RADIUS, RADIUS];
-        const ind = new Individual(v[0],v[1],v[2]);
-        await calculate_fitness(ind).then(fit=>{
-            ind.fitness = fit;
-            population.push(ind);
+        console.log(i);
+        await calculate_fitness(pos[i]).then(fit=>{
+            res.push([fit, pos[i][0], pos[i][1], pos[i][2]]);
         });
     }
-    console.log("INITIAL POPULATION GENERATION COMPLETED");
-    var flag = false;
-    while(!flag)
-    {
-        generation += 1;
-        population.sort(compare_ind);
+    res.sort();
 
-        if(population[0].fitness == previous_fitness)
-        {
-            prev_fit_count+=1;
-        }
-        else
-        {
-            previous_fitness=population[0].fitness;
-            prev_fit_count = 0;
-        }
-        if(prev_fit_count>MIN_SAME_COUNT)
-        {
-            flag = true;
-            break;
-        }
-
-
-        var new_generation = [];
-
-        // retain 10% of the fittest
-        var s = POPULATION_SIZE/10;
-        for(var i=0; i<s; i+=1)
-        {
-            new_generation.push(population[i]);
-        }
-        s = POPULATION_SIZE-s;
-        for(var i=0; i<s; i+=1)
-        {
-            var i1 = Math.floor(random_num(0,POPULATION_SIZE/2));
-            var i2 = Math.floor(random_num(0,POPULATION_SIZE/2));
-            var new_ind = population[i1].mate(population[i2]);
-            await calculate_fitness(new_ind).then(f=>{
-                new_ind.fitness = f;
-                new_generation.push(new_ind);
-            })
-        }
-        population = new_generation;
-        console.log(`Gen: ${generation} Fitness: ${population[0].fitness}`);
-    }
-
-    console.log("Answer: ", population[0]);
-    camera.position.x = population[0].x;
-    camera.position.y = population[0].y;
-    camera.position.z = population[0].z;
+    console.log("Answer: ", res[0][0]);
+    camera.position.x = res[0][1];
+    camera.position.y = res[0][2];
+    camera.position.z = res[0][3];
     camera.lookAt(center.x, center.y, center.z);
     bestFit = true;
     

@@ -25,7 +25,7 @@ const debug=false;
 //---------------------GENETIC ALGORITHM VARIABLES--------------------------
 const POPULATION_SIZE = 15; 
 const RADIUS = 500;
-const MIN_SAME_COUNT = 3;
+const MIN_SAME_COUNT = 2;
 var ModelSurfaceArea=0;
 const colorToComponent = {};
 var totalComponents = 0;
@@ -237,30 +237,14 @@ async function calculate_fitness(ind)
         counter = (ModelSurfaceArea*100)/counter;
         var fitnessValue = 0;
         fitnessValue = componentsVisibleValue + counter + 1/cpCount;
+        // // only Components Visible
+        // fitnessValue = componentsVisibleValue;
+        // // Only projected area
+        // fitnessValue = counter;
+        // // ONly Silhouette count
+        // fitnessValue = 1/cpCount;
         return fitnessValue;
     })
-    
-    // //----------------------------VISIBLE AREA MEASURE------------------------------------------------
-    // let counter = 0;
-
-    // webGLRenderer.render(scene, camera);
-    // var imgData = webGLRenderer.domElement.toDataURL();
-
-    // return loadImage(imgData).then(img => {
-    //     var ci = cv.imread(img);        
-    //     for (var x of ci.data) {
-    //     if (x == 0) {
-    //             counter++;
-    //         }
-    //     }
-    //     counter = counter/(ModelSurfaceArea*100);
-
-    //     var fitnessValue = 0;
-    //     // fitnessValue = counter;
-    //     fitnessValue = componentsVisibleValue;
-    //     // fitnessValue +=  (componentsVisibleValue*10+counter);
-    //     return fitnessValue;     
-    // });
 }
 //-------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------GENETIC POPULATION GENERATION------------------------------------------
@@ -423,7 +407,6 @@ const animate = ()=>{
     if(toRender)
     {
         controls.update();
-        // if(0)main();
         if(!bestFit)main();
         else
         {
@@ -440,22 +423,6 @@ const animate = ()=>{
         window.requestAnimationFrame(animate);
     }
 }
-// animate();
-//----------------------------------------------------------------------------------------------
-//--------------------------------------------OVERLAYS------------------------------------------
-
-// Mouse Coordinates in Canvas system
-var mouseXElement = document.querySelector('#mousex');
-var mouseX = document.createTextNode("");
-mouseXElement.appendChild(mouseX);
-
-var mouseYElement = document.querySelector('#mousey');
-var mouseY = document.createTextNode("");
-mouseYElement.appendChild(mouseY);
-
-var idElement = document.querySelector('#objectID');
-var id = document.createTextNode("");
-idElement.appendChild(id);
 //----------------------------------------*****TESTING*****----------------------------------------
 //----------------------------------------EVENT LISTENERS--------------------------------------------
 var pos=0;

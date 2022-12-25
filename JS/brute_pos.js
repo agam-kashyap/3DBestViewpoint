@@ -306,22 +306,7 @@ const animate = ()=>{
         window.requestAnimationFrame(animate);
     }
 }
-// animate();
-//----------------------------------------------------------------------------------------------
-//--------------------------------------------OVERLAYS------------------------------------------
 
-// Mouse Coordinates in Canvas system
-var mouseXElement = document.querySelector('#mousex');
-var mouseX = document.createTextNode("");
-mouseXElement.appendChild(mouseX);
-
-var mouseYElement = document.querySelector('#mousey');
-var mouseY = document.createTextNode("");
-mouseYElement.appendChild(mouseY);
-
-var idElement = document.querySelector('#objectID');
-var id = document.createTextNode("");
-idElement.appendChild(id);
 //----------------------------------------*****TESTING*****----------------------------------------
 //----------------------------------------EVENT LISTENERS--------------------------------------------
 var pos=0;
